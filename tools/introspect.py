@@ -1,6 +1,6 @@
 """Core tool : auto-analyse du bot (lecture seule).
 
-Le bot examine sa propre config — tools, routines, scrapers, persona,
+Le bot examine sa propre config — tools, routines, scrapers, règles,
 données — pour raisonner sur ses capacités. Aucun de ces tools ne
 modifie de fichier. Les clés API sont masquées.
 """
@@ -94,14 +94,14 @@ def read_routine(name: str) -> dict[str, Any]:
 
 
 @tool(
-    "read_persona",
-    "Retourne le contenu de persona.md.",
+    "read_rules",
+    "Retourne le contenu de RULES.md (règles appliquées au chat et aux routines).",
     {"type": "object", "properties": {}},
 )
-def read_persona() -> dict[str, Any]:
-    if not config.PERSONA_FILE.is_file():
-        return {"persona": "", "exists": False}
-    return {"persona": config.PERSONA_FILE.read_text(encoding="utf-8"), "exists": True}
+def read_rules() -> dict[str, Any]:
+    if not config.RULES_FILE.is_file():
+        return {"rules": "", "exists": False}
+    return {"rules": config.RULES_FILE.read_text(encoding="utf-8"), "exists": True}
 
 
 @tool(
@@ -174,7 +174,7 @@ async def explain_self(question: str) -> dict[str, Any]:
 
     dump = {
         "config": _config_summary(),
-        "persona": read_persona()["persona"],
+        "rules": read_rules()["rules"],
         "tools": list_tools("all")["tools"],
         "routines": [r["name"] for r in list_routines_full()["routines"]],
         "data_schemas": [s["file"] for s in list_data_schemas()["schemas"]],

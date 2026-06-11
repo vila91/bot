@@ -19,7 +19,7 @@ from engine import LLMClient, run_conversation
 from tools import _base
 from tools.memory import append_exchange, context_messages
 
-DEFAULT_PERSONA = (
+DEFAULT_RULES = (
     "Tu es un assistant Discord autonome. Tu utilises tes tools pour "
     "répondre aux questions et exécuter des tâches. Sois concis et utile."
 )
@@ -47,11 +47,11 @@ log = structlog.get_logger()
 
 
 def build_system_prompt() -> str:
-    """Assemble le system prompt dynamiquement (persona + date + tools + hint)."""
-    if config.PERSONA_FILE.is_file():
-        persona = config.PERSONA_FILE.read_text(encoding="utf-8").strip()
+    """Assemble le system prompt dynamiquement (rules + date + tools + hint)."""
+    if config.RULES_FILE.is_file():
+        rules = config.RULES_FILE.read_text(encoding="utf-8").strip()
     else:
-        persona = DEFAULT_PERSONA
+        rules = DEFAULT_RULES
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -68,7 +68,7 @@ def build_system_prompt() -> str:
     )
 
     return (
-        f"{persona}\n\n"
+        f"{rules}\n\n"
         f"Date et heure courantes : {now}\n\n"
         f"Tools disponibles :\n{tools_block}\n\n"
         f"{introspect_hint}"
