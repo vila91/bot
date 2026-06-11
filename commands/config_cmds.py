@@ -9,6 +9,7 @@ import config
 from tools import reload_dynamic
 from tools._base import validate_name
 from tools.introspect import get_config_summary
+from tools.tool_writer import store_secret
 
 
 def register(tree: app_commands.CommandTree) -> None:
@@ -90,6 +91,16 @@ def register(tree: app_commands.CommandTree) -> None:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
         config.RULES_FILE.write_text(text.strip() + "\n", encoding="utf-8")
         await interaction.response.send_message("RULES.md mis à jour.", ephemeral=True)
+
+    @tree.command(
+        name="set_secret",
+        description="Stocke un secret (clé API) déclaré par un tool MD dans le .env",
+    )
+    @app_commands.describe(name="Nom de l'env var (MAJUSCULES)", value="Valeur du secret")
+    async def set_secret(interaction: discord.Interaction, name: str, value: str) -> None:
+        result = store_secret(name, value)
+        msg = result.get("error") or f"Secret `{name}` stocké."
+        await interaction.response.send_message(msg, ephemeral=True)
 
     @tree.command(name="status", description="Affiche la configuration courante")
     async def status(interaction: discord.Interaction) -> None:

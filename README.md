@@ -118,10 +118,10 @@ DATA_DIR=$HOME/.autobot ./venv/bin/python3 bot.py
 
 | Catégorie | Commandes |
 |-----------|-----------|
-| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/status` |
+| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/set_secret` `/status` |
 | **Mémoire** | `/reset` `/recall <date>` `/forget <before>` |
 | **Routines** | `/routines` `/run <name>` `/pause <name>` `/resume <name>` `/create_routine` `/delete_routine` |
-| **Tools** | `/tools` `/tool_info <name>` `/reload_tools` |
+| **Tools** | `/tools` `/tool_info <name>` `/create_tool` `/delete_tool` `/reload_tools` |
 
 ### Routines planifiées
 
@@ -151,7 +151,13 @@ Le runner écrit sur le channel Discord (`POST: …`) ou skip silencieusement (`
 
 ### Tools personnalisés (sans Python)
 
-Dépose un `.md` dans `$DATA_DIR/tools_md/` (voir le format dans CLAUDE.md, section **Tools déclaratifs**). Le bot le charge au démarrage ou via `/reload_tools`.
+Trois façons de créer un tool, toutes équivalentes — elles écrivent un `.md` dans `$DATA_DIR/tools_md/` (jamais dans le repo) :
+
+- **Demander au bot dans le chat** : « Crée-moi un tool qui appelle l'API X avec ces paramètres. » Le LLM utilise `create_md_tool`. Si une clé API manque, il te la demande et la stocke via `store_secret`.
+- **Slash command** : `/create_tool name description source_type source_target [parameters_json] [logic] [secrets]`. Si le tool a besoin d'une clé : `/set_secret NAME value`.
+- **À la main** : déposer un `.md` puis `/reload_tools`.
+
+Format détaillé dans CLAUDE.md, section **Tools déclaratifs**. Aucun code exécutable n'est accepté — les tools custom sont **uniquement** déclaratifs (Markdown + YAML).
 
 ### Scrapers
 

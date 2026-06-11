@@ -7,6 +7,8 @@ exécutable : la `logic` est interprétée, jamais évaluée.
 """
 from __future__ import annotations
 
+import os
+import re
 from typing import Any
 
 import httpx
@@ -18,6 +20,44 @@ import config
 from ._base import ToolDefinition, register, unregister_by_source, validate_name
 
 log = structlog.get_logger()
+
+ALLOWED_SOURCE_TYPES = {"csv", "api", "scraper", "computed", "file"}
+FORBIDDEN_FRONTMATTER_KEYS = {"python", "exec", "eval", "code", "import"}
+
+_SECRET_RE = re.compile(r"\$\{([A-Z][A-Z0-9_]*)\}")
+
+
+def _substitute_secrets(value: Any) -> Any:
+    """Remplace ${VAR} par os.environ[VAR] dans une str ou récursivement dans dict/list.
+
+    Si la variable est absente, on garde le placeholder tel quel — le tool
+    pourra alors signaler la clé manquante au LLM.
+    """
+    if isinstance(value, str):
+        return _SECRET_RE.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)
+    if isinstance(value, dict):
+        return {k: _substitute_secrets(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_substitute_secrets(v) for v in value]
+    return value
+
+
+def collect_declared_secrets() -> dict[str, list[str]]:
+    """Pour chaque tool MD, retourne la liste de secrets déclarés. {tool_name: [SECRETS]}."""
+    out: dict[str, list[str]] = {}
+    if not config.TOOLS_MD_DIR.is_dir():
+        return out
+    for path in sorted(config.TOOLS_MD_DIR.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        try:
+            fm, _ = _parse(path)
+            secrets = fm.get("secrets") or []
+            if isinstance(secrets, list) and secrets:
+                out[fm.get("name") or path.stem] = [str(s) for s in secrets]
+        except Exception:  # noqa: BLE001
+            continue
+    return out
 
 
 def _parse(path) -> tuple[dict[str, Any], str]:
@@ -64,9 +104,21 @@ def _make_func(fm: dict[str, Any], body: str):
                 "args": kwargs,
             }
         if stype == "api":
-            url = source.get("url", "")
+            url = _substitute_secrets(source.get("url", ""))
+            headers = _substitute_secrets(source.get("headers") or {})
+            extra_params = _substitute_secrets(source.get("params") or {})
+            missing = _SECRET_RE.findall(
+                url + " " + " ".join(f"{k}={v}" for k, v in {**headers, **extra_params}.items())
+            )
+            if missing:
+                return {
+                    "tool": fm.get("name"),
+                    "error": "missing_secrets",
+                    "secrets": sorted(set(missing)),
+                    "hint": "Demande à l'utilisateur de fournir ces clés puis appelle store_secret.",
+                }
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(url, params=kwargs)
+                resp = await client.get(url, params={**extra_params, **kwargs}, headers=headers)
                 resp.raise_for_status()
                 try:
                     payload = resp.json()
@@ -101,6 +153,12 @@ def load_md_tools() -> int:
             fm, body = _parse(path)
             name = fm.get("name") or path.stem
             validate_name(name)
+            forbidden = FORBIDDEN_FRONTMATTER_KEYS & set(fm.keys())
+            if forbidden:
+                raise ValueError(f"clés interdites dans le frontmatter: {sorted(forbidden)}")
+            stype = (fm.get("source") or {}).get("type", "computed")
+            if stype not in ALLOWED_SOURCE_TYPES:
+                raise ValueError(f"source.type inconnu: {stype}")
             register(
                 ToolDefinition(
                     name=name,

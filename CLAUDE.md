@@ -394,6 +394,44 @@ Le framework traduit ce `.md` en :
    - `source.type: computed` → le LLM interprète la logique sur les données chargées
    - `source.type: scraper` → utilise un scraper configuré
 
+Les tools MD sont **toujours** stockés dans `DATA_DIR/tools_md/`, jamais dans le repo. Le format MD est strict : aucun code exécutable n'est lu, et les clés `python`/`exec`/`eval`/`code`/`import` dans le frontmatter sont rejetées au chargement.
+
+#### Création par chat ou par slash
+
+Deux points d'entrée partagent la même fonction d'écriture (`tools/tool_writer.write_md_tool`) :
+
+- **`/create_tool name description source_type source_target [parameters_json] [logic] [secrets]`** — assistant interactif Discord.
+- **Core tool `create_md_tool`** exposé au LLM — le bot peut créer un tool depuis la conversation (« crée-moi un tool qui interroge l'API Polygon »).
+
+Tools associés exposés au LLM :
+- `delete_md_tool(name)` — suppression
+- `list_required_secrets()` — liste les `secrets:` déclarés par les tools et leur état (set/unset)
+- `store_secret(name, value)` — stocke un secret dans le `.env` (uniquement si déclaré par un tool MD, jamais si la clé est dans `PROTECTED_ENV_KEYS`)
+
+#### Secrets et clés API
+
+Un tool MD peut déclarer ses dépendances en secrets dans le frontmatter :
+
+```yaml
+---
+name: polygon_price
+source:
+  type: api
+  url: https://api.polygon.io/v2/aggs/ticker/${POLYGON_API_KEY_PLACEHOLDER}/...
+  headers:
+    Authorization: "Bearer ${POLYGON_API_KEY}"
+secrets:
+  - POLYGON_API_KEY
+---
+```
+
+À l'exécution, `${VAR}` est substitué depuis `os.environ`. Si une variable manque, le tool renvoie `{"error": "missing_secrets", "secrets": [...]}` — le LLM voit la liste et peut demander la clé à l'utilisateur, puis appeler `store_secret` pour la persister dans le `.env` de l'instance.
+
+Garde-fous :
+- `store_secret` refuse les clés non déclarées par un tool MD (anti-injection)
+- `store_secret` refuse `PROTECTED_ENV_KEYS` (`DISCORD_BOT_TOKEN`, `LLM_API_KEY`, …) — modifiables uniquement via `/set_llm` ou édition manuelle du `.env`
+- Slash command `/set_secret` (ephemeral) pour l'entrée manuelle
+
 #### Chargement dynamique
 
 Au démarrage et sur `/reload_tools`, le framework :

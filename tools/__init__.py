@@ -16,7 +16,7 @@ import structlog
 from . import _base
 
 # Import des modules core → exécute les décorateurs @tool.
-from . import data_reader, introspect, memory, scheduler, scraper, tavily  # noqa: F401
+from . import data_reader, introspect, memory, scheduler, scraper, tavily, tool_writer  # noqa: F401
 from .md_loader import load_md_tools
 from .scraper import load_scraper_tools
 
