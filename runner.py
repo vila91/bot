@@ -97,7 +97,12 @@ async def run_routine(path: Path) -> None:
     data_block = await fetch_from_sources(sources)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    system_prompt = f"{body}\n\nDate : {now}{SKIP_POST_INSTRUCTION}"
+    persona = ""
+    if config.PERSONA_FILE.is_file():
+        persona = config.PERSONA_FILE.read_text(encoding="utf-8").strip()
+    persona_block = f"{persona}\n\n" if persona else ""
+
+    system_prompt = f"{persona_block}{body}\n\nDate : {now}{SKIP_POST_INSTRUCTION}"
     user_content = data_block or "(aucune donnée collectée)"
     messages = [
         {"role": "system", "content": system_prompt},

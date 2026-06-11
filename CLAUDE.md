@@ -449,7 +449,7 @@ $PYTHON_BIN runner.py $DATA_DIR/routines/<nom>.md
 
 1. Parse le frontmatter YAML (`name`, `cron`, `sources`) et le corps (system_prompt)
 2. Collecte les données depuis chaque source déclarée
-3. Appelle le LLM avec données + system_prompt + convention SKIP/POST automatique
+3. Appelle le LLM avec `persona.md` (préfixé) + données + system_prompt + convention SKIP/POST automatique. Le persona est partagé entre le chat et les routines : les règles générales (ton, format, garde-fous) s'appliquent partout.
 4. Interprète la réponse :
    - `POST: <message>` → poste sur le channel Discord configuré
    - `SKIP: <raison>` → log uniquement, pas de post Discord

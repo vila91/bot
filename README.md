@@ -68,7 +68,7 @@ Les autres variables (`LLM_PROVIDER`, `LLM_MODEL`, `MEMORY_WINDOW_HOURS`, `MAX_T
 
 ### 2. Définir le persona
 
-Le persona pilote le ton et le rôle du bot. Édite `persona.md` dans le `DATA_DIR` :
+Le persona pilote le ton, le rôle et les **règles générales** du bot. Il est injecté à la fois dans le chat (à chaque message) et dans les routines planifiées (préfixé au `system_prompt` de chaque routine) — autrement dit, c'est l'endroit pour les règles qui doivent s'appliquer partout. Édite `persona.md` dans le `DATA_DIR` :
 
 ```bash
 nano "$HOME/.autobot/persona.md"
