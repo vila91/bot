@@ -186,7 +186,7 @@ Limite de sécurité : **max 15 tours par message** (configurable via `MAX_TOOL_
 Le system prompt est assemblé dynamiquement à chaque message :
 
 ```
-1. Persona de base (DATA_DIR/persona.md si existant, sinon défaut générique)
+1. Règles générales (DATA_DIR/RULES.md si existant, sinon défaut générique)
 2. Date/heure courante
 3. Liste des tools disponibles (résumé)
 4. Hint introspect : "Tu disposes d'un tool introspect pour examiner tes propres
@@ -195,7 +195,7 @@ Le system prompt est assemblé dynamiquement à chaque message :
 5. Contexte mémoire (fenêtre glissante)
 ```
 
-L'utilisateur personnalise le comportement du bot en éditant `persona.md` dans `DATA_DIR`.
+L'utilisateur personnalise le comportement du bot (identité, ton, règles dures) en éditant `RULES.md` dans `DATA_DIR`. Ce fichier est partagé entre le chat et les routines : ce qui y est écrit s'applique partout.
 
 ---
 
@@ -210,7 +210,7 @@ Les commandes `/` permettent de configurer le bot sans toucher aux fichiers.
 | `/set_llm` | `provider`, `model`, `api_key?` | Change le LLM (DeepSeek, OpenAI, Anthropic, local) |
 | `/set_scraper` | `name`, `url` | Configure un site cible pour le scraping. Crée un descripteur `.md` interactif. |
 | `/set_memory_window` | `hours: int` | Durée de la fenêtre mémoire (défaut: 24h) |
-| `/set_persona` | `text` | Modifie le persona.md du bot |
+| `/set_rules` | `text` | Modifie le `RULES.md` du bot (règles générales partagées chat + routines) |
 | `/status` | — | Affiche la config courante (LLM, tools chargés, routines actives) |
 
 ### Mémoire
@@ -316,7 +316,7 @@ Format de `current.json` :
 
 #### `introspect` — Auto-analyse du bot
 
-Le bot peut examiner sa propre configuration : tools, routines, scrapers, persona, données. C'est le mécanisme qui lui permet de **raisonner sur ses propres capacités** et de répondre à des questions comme "qu'est-ce que tu sais faire ?", "montre-moi la routine metals", "quel tool utilise positions.csv ?", "est-ce que tu as un scraper pour Drouot ?".
+Le bot peut examiner sa propre configuration : tools, routines, scrapers, rules, données. C'est le mécanisme qui lui permet de **raisonner sur ses propres capacités** et de répondre à des questions comme "qu'est-ce que tu sais faire ?", "montre-moi la routine metals", "quel tool utilise positions.csv ?", "est-ce que tu as un scraper pour Drouot ?".
 
 Le LLM utilise `introspect` spontanément quand une question porte sur les capacités ou la configuration du bot, et l'utilisateur peut aussi le déclencher via `/tools` et `/tool_info`.
 
@@ -326,14 +326,14 @@ Le LLM utilise `introspect` spontanément quand une question porte sur les capac
 | `read_tool_definition` | `name: str` | Retourne le contenu complet d'un tool : pour un core tool → le JSON schema exposé au LLM + docstring ; pour un tool MD → le fichier `.md` brut (frontmatter + corps) ; pour un scraper → le descripteur `.md` du scraper. |
 | `list_routines_full` | — | Liste toutes les routines avec leur contenu complet (frontmatter + system_prompt), pas juste le nom. Permet au bot de comprendre ce que fait chaque routine. |
 | `read_routine` | `name: str` | Retourne le `.md` brut d'une routine (frontmatter YAML + system_prompt). |
-| `read_persona` | — | Retourne le contenu de `persona.md`. |
+| `read_rules` | — | Retourne le contenu de `RULES.md`. |
 | `list_data_schemas` | — | Pour chaque CSV dans `data/`, retourne le nom du fichier, les en-têtes de colonnes, le nombre de lignes, et un échantillon (5 premières lignes). Permet au bot de comprendre la structure des données sans tout charger. |
 | `get_config_summary` | — | Retourne la config active (LLM provider/model, memory window, nombre de tools/routines/scrapers, DATA_DIR). Masque les clés API. |
-| `explain_self` | `question: str` | Meta-tool : le bot reçoit la question + un dump de toute sa config (persona, liste tools, liste routines, liste scrapers, schémas CSV) et génère une réponse cohérente sur ses propres capacités. Utile pour "que sais-tu faire ?" sans que l'utilisateur connaisse les noms exacts. |
+| `explain_self` | `question: str` | Meta-tool : le bot reçoit la question + un dump de toute sa config (rules, liste tools, liste routines, liste scrapers, schémas CSV) et génère une réponse cohérente sur ses propres capacités. Utile pour "que sais-tu faire ?" sans que l'utilisateur connaisse les noms exacts. |
 
 **Cas d'usage clés :**
 
-- *L'utilisateur demande "qu'est-ce que tu peux faire ?"* → le LLM appelle `explain_self` qui agrège persona + tools + routines pour une réponse contextualisée.
+- *L'utilisateur demande "qu'est-ce que tu peux faire ?"* → le LLM appelle `explain_self` qui agrège rules + tools + routines pour une réponse contextualisée.
 - *L'utilisateur demande "montre-moi la routine quantum"* → `read_routine("quantum")` retourne le MD brut.
 - *L'utilisateur demande "quel tool utilise positions.csv ?"* → `list_tools("all")` + `read_tool_definition` sur chaque tool pour chercher la référence au fichier.
 - *Le LLM hésite entre deux tools* → il appelle `read_tool_definition` sur chacun pour comparer leurs capacités avant de choisir.
@@ -449,7 +449,7 @@ $PYTHON_BIN runner.py $DATA_DIR/routines/<nom>.md
 
 1. Parse le frontmatter YAML (`name`, `cron`, `sources`) et le corps (system_prompt)
 2. Collecte les données depuis chaque source déclarée
-3. Appelle le LLM avec `persona.md` (préfixé) + données + system_prompt + convention SKIP/POST automatique. Le persona est partagé entre le chat et les routines : les règles générales (ton, format, garde-fous) s'appliquent partout.
+3. Appelle le LLM avec `RULES.md` (préfixé) + données + system_prompt + convention SKIP/POST automatique. `RULES.md` est partagé entre le chat et les routines : les règles générales (identité, ton, format, garde-fous) s'appliquent partout.
 4. Interprète la réponse :
    - `POST: <message>` → poste sur le channel Discord configuré
    - `SKIP: <raison>` → log uniquement, pas de post Discord
@@ -668,12 +668,12 @@ if [ ! -f "$DATA_DIR/.env" ]; then
   echo "→ Éditer $DATA_DIR/.env avec vos clés API"
 fi
 
-# 4. Persona par défaut
-if [ ! -f "$DATA_DIR/persona.md" ]; then
-  cat > "$DATA_DIR/persona.md" << 'PERSONA'
+# 4. RULES.md par défaut
+if [ ! -f "$DATA_DIR/RULES.md" ]; then
+  cat > "$DATA_DIR/RULES.md" << 'RULES'
 Tu es un assistant Discord autonome. Tu utilises tes tools pour répondre
 aux questions et exécuter des tâches. Sois concis et utile.
-PERSONA
+RULES
 fi
 
 # 5. Service systemd (optionnel — skip si pas sudo)
@@ -748,7 +748,7 @@ journalctl -u autobot-veille-tech -f
 | Code Python (`bot.py`, `tools/`, `engine/`) | ✅ | |
 | Venv + dépendances | ✅ | |
 | `.env` (clés API, channel Discord) | | ✅ |
-| `persona.md` | | ✅ |
+| `RULES.md` | | ✅ |
 | `data/*.csv` | | ✅ |
 | `tools_md/*.md` | | ✅ |
 | `scrapers/*.md` | | ✅ |
@@ -796,10 +796,10 @@ nano "$HOME/.autobot-mon-bot/.env"
 
 Chaque instance a **son propre `DISCORD_BOT_TOKEN` et `DISCORD_CHANNEL_ID`** — c'est ce qui permet d'avoir plusieurs bots sur le même serveur Discord (un channel par bot).
 
-### Étape 3 : Définir le persona
+### Étape 3 : Définir les règles générales
 
 ```bash
-nano "$HOME/.autobot-mon-bot/persona.md"
+nano "$HOME/.autobot-mon-bot/RULES.md"
 ```
 
 ### Étape 4 : Déposer vos données
@@ -831,7 +831,7 @@ sudo systemctl start autobot-mon-bot
 ### Bot de trading (l'original)
 
 ```
-persona.md     → Analyste trading, style concis, focus portefeuille
+RULES.md       → Analyste trading, style concis, focus portefeuille
 data/          → positions.csv, observed_tickers.csv
 tools_md/      → get_portfolio_summary.md, get_moving_averages.md
 scrapers/      → (aucun)
@@ -842,7 +842,7 @@ routines/      → quantum.md, metals.md, weekly_recap.md
 ### Bot de veille technologique
 
 ```
-persona.md     → Veilleur tech, résumés quotidiens, focus IA/cloud
+RULES.md       → Veilleur tech, résumés quotidiens, focus IA/cloud
 data/          → watchlist.csv (entreprises et sujets suivis)
 tools_md/      → analyze_trend.md
 scrapers/      → hackernews.md, techcrunch.md
@@ -852,7 +852,7 @@ routines/      → daily_digest.md, breaking_news.md
 ### Bot de suivi CRM
 
 ```
-persona.md     → Assistant commercial, suivi pipeline
+RULES.md       → Assistant commercial, suivi pipeline
 data/          → contacts.csv, deals.csv, activities.csv
 tools_md/      → deal_summary.md, next_actions.md
 scrapers/      → linkedin_company.md
@@ -930,7 +930,7 @@ Plus les dépendances spécifiques au domaine (ex: `yfinance`, `polygon-api-clie
 ## Roadmap framework
 
 - [ ] Interface web de configuration (alternative aux slash commands)
-- [ ] Support multi-channel (un persona par channel)
+- [ ] Support multi-channel (un `RULES.md` par channel)
 - [ ] Webhook Discord en plus du bot (pour intégrations externes)
 - [ ] Plugin system pour les core tools (pip installable)
 - [ ] Support Telegram / Slack en plus de Discord

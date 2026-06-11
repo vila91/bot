@@ -39,7 +39,7 @@ MEMORY_DIR = DATA_DIR / "memory"
 TOOLS_MD_DIR = DATA_DIR / "tools_md"
 SCRAPERS_DIR = DATA_DIR / "scrapers"
 DATA_FILES_DIR = DATA_DIR / "data"
-PERSONA_FILE = DATA_DIR / "persona.md"
+RULES_FILE = DATA_DIR / "RULES.md"
 PYTHON_BIN = REPO_DIR / "venv" / "bin" / "python3"
 
 

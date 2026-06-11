@@ -40,7 +40,7 @@ Le script :
 1. Crée le venv (`./venv/`) et installe `requirements.txt`
 2. Crée le `DATA_DIR` (`~/.autobot/` ou `~/.autobot-<instance>/`)
 3. Génère le `.env` depuis `.env.template` avec les chemins résolus
-4. Crée un `persona.md` par défaut
+4. Crée un `RULES.md` par défaut
 5. Installe le service systemd `autobot[-<instance>].service` (si `sudo` dispo)
 
 À la fin, le script affiche le chemin du `.env` à compléter.
@@ -66,12 +66,12 @@ Variables minimales à remplir :
 
 Les autres variables (`LLM_PROVIDER`, `LLM_MODEL`, `MEMORY_WINDOW_HOURS`, `MAX_TOOL_ROUNDS`, `LOG_LEVEL`) ont des défauts sains.
 
-### 2. Définir le persona
+### 2. Définir les règles générales
 
-Le persona pilote le ton, le rôle et les **règles générales** du bot. Il est injecté à la fois dans le chat (à chaque message) et dans les routines planifiées (préfixé au `system_prompt` de chaque routine) — autrement dit, c'est l'endroit pour les règles qui doivent s'appliquer partout. Édite `persona.md` dans le `DATA_DIR` :
+`RULES.md` pilote l'identité, le ton, le format de réponse et les **règles dures** du bot (garde-fous, sujets interdits, conventions de sortie). Il est injecté à la fois dans le chat (à chaque message) et dans les routines planifiées (préfixé au `system_prompt` de chaque routine) — c'est l'endroit pour tout ce qui doit s'appliquer partout. Édite `RULES.md` dans le `DATA_DIR` :
 
 ```bash
-nano "$HOME/.autobot/persona.md"
+nano "$HOME/.autobot/RULES.md"
 ```
 
 Exemple :
@@ -81,7 +81,7 @@ Tu es un analyste trading. Réponses concises, focus portefeuille.
 Tu utilises tes tools pour lire positions.csv et calculer les P&L.
 ```
 
-Modifiable aussi à chaud via `/set_persona`.
+Modifiable aussi à chaud via `/set_rules`.
 
 ### 3. Déposer vos données
 
@@ -118,7 +118,7 @@ DATA_DIR=$HOME/.autobot ./venv/bin/python3 bot.py
 
 | Catégorie | Commandes |
 |-----------|-----------|
-| **Config** | `/set_llm` `/set_persona` `/set_memory_window` `/set_scraper` `/status` |
+| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/status` |
 | **Mémoire** | `/reset` `/recall <date>` `/forget <before>` |
 | **Routines** | `/routines` `/run <name>` `/pause <name>` `/resume <name>` `/create_routine` `/delete_routine` |
 | **Tools** | `/tools` `/tool_info <name>` `/reload_tools` |

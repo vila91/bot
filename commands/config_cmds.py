@@ -1,5 +1,5 @@
 """Slash commands de configuration : /set_llm, /set_scraper, /set_memory_window,
-/set_persona, /status."""
+/set_rules, /status."""
 from __future__ import annotations
 
 import discord
@@ -84,12 +84,12 @@ def register(tree: app_commands.CommandTree) -> None:
             f"Fenêtre mémoire : {hours}h", ephemeral=True
         )
 
-    @tree.command(name="set_persona", description="Modifie le persona du bot")
-    @app_commands.describe(text="Nouveau texte du persona")
-    async def set_persona(interaction: discord.Interaction, text: str) -> None:
+    @tree.command(name="set_rules", description="Modifie les règles générales du bot (RULES.md)")
+    @app_commands.describe(text="Nouveau contenu de RULES.md")
+    async def set_rules(interaction: discord.Interaction, text: str) -> None:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        config.PERSONA_FILE.write_text(text.strip() + "\n", encoding="utf-8")
-        await interaction.response.send_message("Persona mis à jour.", ephemeral=True)
+        config.RULES_FILE.write_text(text.strip() + "\n", encoding="utf-8")
+        await interaction.response.send_message("RULES.md mis à jour.", ephemeral=True)
 
     @tree.command(name="status", description="Affiche la configuration courante")
     async def status(interaction: discord.Interaction) -> None:
