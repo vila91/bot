@@ -31,7 +31,7 @@ fi
 "$REPO_DIR/venv/bin/pip" install -r "$REPO_DIR/requirements.txt"
 
 # 2. Dossiers data (propres à l'instance)
-mkdir -p "$DATA_DIR"/{data,routines,memory,tools_md,scrapers}
+mkdir -p "$DATA_DIR"/{data,routines,memory,scrapers}
 
 # 3. .env (propre à l'instance)
 if [ ! -f "$DATA_DIR/.env" ]; then

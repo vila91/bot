@@ -118,10 +118,10 @@ DATA_DIR=$HOME/.autobot ./venv/bin/python3 bot.py
 
 | Catégorie | Commandes |
 |-----------|-----------|
-| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/set_secret` `/status` |
+| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/status` |
 | **Mémoire** | `/reset` `/recall <date>` `/forget <before>` |
 | **Routines** | `/routines` `/run <name>` `/pause <name>` `/resume <name>` `/create_routine` `/delete_routine` |
-| **Tools** | `/tools` `/tool_info <name>` `/create_tool` `/delete_tool` `/reload_tools` |
+| **Tools** | `/tools` `/tool_info <name>` `/reload_tools` |
 
 ### Routines planifiées
 
@@ -149,15 +149,16 @@ bash $DATA_DIR/routines/install_crontab.sh
 
 Le runner écrit sur le channel Discord (`POST: …`) ou skip silencieusement (`SKIP: …`).
 
-### Tools personnalisés (sans Python)
+### Tools personnalisés (admin uniquement)
 
-Trois façons de créer un tool, toutes équivalentes — elles écrivent un `.md` dans `$DATA_DIR/tools_md/` (jamais dans le repo) :
+Les tools sont gérés dans le repo, pas depuis le chat. L'admin choisit le format selon le besoin :
 
-- **Demander au bot dans le chat** : « Crée-moi un tool qui appelle l'API X avec ces paramètres. » Le LLM utilise `create_md_tool`. Si une clé API manque, il te la demande et la stocke via `store_secret`.
-- **Slash command** : `/create_tool name description source_type source_target [parameters_json] [logic] [secrets]`. Si le tool a besoin d'une clé : `/set_secret NAME value`.
-- **À la main** : déposer un `.md` puis `/reload_tools`.
+- **Tool déclaratif** (`.md`) — committer un fichier dans `tools_md/` à la racine du repo. Pas de code, juste un frontmatter YAML qui décrit la source (`csv` / `api` / `scraper` / `file` / `computed`) et la logique en langage naturel. Voir `tools_md/README.md` pour le format.
+- **Tool Python** — ajouter un module dans `tools/` avec le décorateur `@tool` (voir les core tools existants comme modèle). Utile pour du calcul lourd, un SDK tiers, ou une logique qui ne tient pas en YAML.
 
-Format détaillé dans CLAUDE.md, section **Tools déclaratifs**. Aucun code exécutable n'est accepté — les tools custom sont **uniquement** déclaratifs (Markdown + YAML).
+Après un commit, `git pull` + redémarrer (ou `/reload_tools` pour les MD seulement) pour que le nouveau tool soit chargé.
+
+Pour les clés API : un tool MD peut référencer `${VAR}` dans son `source` et lister la variable dans `secrets:`. L'opérateur renseigne la valeur dans `$DATA_DIR/.env`.
 
 ### Scrapers
 

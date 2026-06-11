@@ -36,7 +36,7 @@ if _data_dir_from_env and _data_dir_from_env != "__DATA_DIR__":
 # === Chemins dérivés ===
 ROUTINES_DIR = DATA_DIR / "routines"
 MEMORY_DIR = DATA_DIR / "memory"
-TOOLS_MD_DIR = DATA_DIR / "tools_md"
+TOOLS_MD_DIR = REPO_DIR / "tools_md"
 SCRAPERS_DIR = DATA_DIR / "scrapers"
 DATA_FILES_DIR = DATA_DIR / "data"
 RULES_FILE = DATA_DIR / "RULES.md"
@@ -101,5 +101,5 @@ def update_env(updates: dict[str, str]) -> None:
 
 
 def ensure_dirs() -> None:
-    for d in (DATA_DIR, ROUTINES_DIR, MEMORY_DIR, TOOLS_MD_DIR, SCRAPERS_DIR, DATA_FILES_DIR):
+    for d in (DATA_DIR, ROUTINES_DIR, MEMORY_DIR, SCRAPERS_DIR, DATA_FILES_DIR):
         d.mkdir(parents=True, exist_ok=True)

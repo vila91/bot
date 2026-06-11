@@ -134,9 +134,6 @@ Par défaut : `~/.autobot/` (surchargeable via `DATA_DIR` dans `.env`).
 │   ├── *.csv                     # Ex: positions.csv, inventory.csv, contacts.csv...
 │   └── README.md                 # Documentation du schéma des CSV
 │
-├── tools_md/                     # Tool descriptors déclaratifs (voir section dédiée)
-│   └── *.md                      # Chaque .md = un tool supplémentaire pour le LLM
-│
 ├── routines/                     # Routines de veille planifiées
 │   ├── crontab                   # Jobs planifiés (installé via install_crontab.sh)
 │   ├── crontab.bak               # Backup auto avant chaque modif
@@ -238,7 +235,7 @@ Les commandes `/` permettent de configurer le bot sans toucher aux fichiers.
 |----------|-----------|-------------|
 | `/tools` | — | Liste tous les tools disponibles (core + MD + scrapers) |
 | `/tool_info` | `name` | Affiche le schéma et la description d'un tool |
-| `/reload_tools` | — | Recharge les tools MD depuis `DATA_DIR/tools_md/` à chaud |
+| `/reload_tools` | — | Recharge les tools MD depuis `tools_md/` du repo à chaud |
 
 ---
 
@@ -354,7 +351,7 @@ Scrape un site configuré via `/set_scraper` ou via un descripteur `.md` dans `D
 
 ### 2. Tools déclaratifs (Markdown)
 
-L'utilisateur peut créer des tools **sans écrire de Python** en déposant un fichier `.md` dans `DATA_DIR/tools_md/`.
+L'admin ajoute des tools **sans écrire de Python** en committant un fichier `.md` dans `tools_md/` à la racine du repo. Pour un besoin qui dépasse le déclaratif, il code un tool Python dans `tools/` (voir core tools existants comme modèle).
 
 #### Format d'un tool descriptor (`.md`)
 
@@ -394,19 +391,11 @@ Le framework traduit ce `.md` en :
    - `source.type: computed` → le LLM interprète la logique sur les données chargées
    - `source.type: scraper` → utilise un scraper configuré
 
-Les tools MD sont **toujours** stockés dans `DATA_DIR/tools_md/`, jamais dans le repo. Le format MD est strict : aucun code exécutable n'est lu, et les clés `python`/`exec`/`eval`/`code`/`import` dans le frontmatter sont rejetées au chargement.
+Les tools MD sont **toujours** stockés dans `tools_md/` à la racine du repo, versionnés avec le code. **Seul l'admin** crée ou modifie un tool, via un commit git — pas de création depuis le chat ni via slash command. Cela garantit qu'un tool est revu, testé et tracé avant d'être disponible pour le LLM.
 
-#### Création par chat ou par slash
+Le format MD est strict : aucun code exécutable, les clés `python`/`exec`/`eval`/`code`/`import` dans le frontmatter sont rejetées au chargement, et `source.type` doit être l'un des types autorisés (`csv`/`api`/`scraper`/`computed`/`file`).
 
-Deux points d'entrée partagent la même fonction d'écriture (`tools/tool_writer.write_md_tool`) :
-
-- **`/create_tool name description source_type source_target [parameters_json] [logic] [secrets]`** — assistant interactif Discord.
-- **Core tool `create_md_tool`** exposé au LLM — le bot peut créer un tool depuis la conversation (« crée-moi un tool qui interroge l'API Polygon »).
-
-Tools associés exposés au LLM :
-- `delete_md_tool(name)` — suppression
-- `list_required_secrets()` — liste les `secrets:` déclarés par les tools et leur état (set/unset)
-- `store_secret(name, value)` — stocke un secret dans le `.env` (uniquement si déclaré par un tool MD, jamais si la clé est dans `PROTECTED_ENV_KEYS`)
+Pour un tool plus complexe (calcul lourd, parsing custom, intégration SDK), l'admin ajoute un module Python dans `tools/` et utilise le décorateur `@tool` (voir `tools/_base.py`).
 
 #### Secrets et clés API
 
@@ -417,7 +406,7 @@ Un tool MD peut déclarer ses dépendances en secrets dans le frontmatter :
 name: polygon_price
 source:
   type: api
-  url: https://api.polygon.io/v2/aggs/ticker/${POLYGON_API_KEY_PLACEHOLDER}/...
+  url: https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/day/2024-01-01/2024-01-31
   headers:
     Authorization: "Bearer ${POLYGON_API_KEY}"
 secrets:
@@ -425,17 +414,12 @@ secrets:
 ---
 ```
 
-À l'exécution, `${VAR}` est substitué depuis `os.environ`. Si une variable manque, le tool renvoie `{"error": "missing_secrets", "secrets": [...]}` — le LLM voit la liste et peut demander la clé à l'utilisateur, puis appeler `store_secret` pour la persister dans le `.env` de l'instance.
-
-Garde-fous :
-- `store_secret` refuse les clés non déclarées par un tool MD (anti-injection)
-- `store_secret` refuse `PROTECTED_ENV_KEYS` (`DISCORD_BOT_TOKEN`, `LLM_API_KEY`, …) — modifiables uniquement via `/set_llm` ou édition manuelle du `.env`
-- Slash command `/set_secret` (ephemeral) pour l'entrée manuelle
+À l'exécution, `${VAR}` dans `source.url`, `source.headers` ou `source.params` est substitué depuis `os.environ`. L'admin renseigne les valeurs dans `$DATA_DIR/.env`. Si une variable manque, le tool renvoie `{"error": "missing_secrets", "secrets": [...]}` au LLM sans appeler l'API — le bot peut alors expliquer à l'utilisateur quelle clé doit être ajoutée au `.env`.
 
 #### Chargement dynamique
 
 Au démarrage et sur `/reload_tools`, le framework :
-1. Scanne `DATA_DIR/tools_md/*.md`
+1. Scanne `tools_md/*.md` à la racine du repo
 2. Parse le frontmatter YAML
 3. Génère les `TOOLS_DEFINITIONS` correspondantes
 4. Les ajoute au registre aux côtés des core tools
@@ -593,7 +577,7 @@ LOG_LEVEL=INFO                     # DEBUG | INFO | WARNING | ERROR
 DATA_DIR       = Path(os.getenv("DATA_DIR", Path.home() / ".autobot"))
 ROUTINES_DIR   = DATA_DIR / "routines"
 MEMORY_DIR     = DATA_DIR / "memory"
-TOOLS_MD_DIR   = DATA_DIR / "tools_md"
+TOOLS_MD_DIR   = REPO_DIR / "tools_md"
 SCRAPERS_DIR   = DATA_DIR / "scrapers"
 DATA_FILES_DIR = DATA_DIR / "data"
 PYTHON_BIN     = Path(__file__).parent / "venv" / "bin" / "python3"
@@ -696,7 +680,7 @@ fi
 "$REPO_DIR/venv/bin/pip" install -r "$REPO_DIR/requirements.txt"
 
 # 2. Dossiers data (propres à l'instance)
-mkdir -p "$DATA_DIR"/{data,routines,memory,tools_md,scrapers}
+mkdir -p "$DATA_DIR"/{data,routines,memory,scrapers}
 
 # 3. .env (propre à l'instance)
 if [ ! -f "$DATA_DIR/.env" ]; then
@@ -788,7 +772,7 @@ journalctl -u autobot-veille-tech -f
 | `.env` (clés API, channel Discord) | | ✅ |
 | `RULES.md` | | ✅ |
 | `data/*.csv` | | ✅ |
-| `tools_md/*.md` | | ✅ |
+| `tools_md/*.md` (dans le repo) | ✅ | |
 | `scrapers/*.md` | | ✅ |
 | `routines/*.md` + crontab | | ✅ |
 | `memory/` | | ✅ |
@@ -844,9 +828,9 @@ nano "$HOME/.autobot-mon-bot/RULES.md"
 
 Placer vos CSV dans `$DATA_DIR/data/`.
 
-### Étape 5 : Créer des tools personnalisés (optionnel)
+### Étape 5 : Créer des tools personnalisés (optionnel, admin uniquement)
 
-Déposer des `.md` dans `$DATA_DIR/tools_md/`.
+Committer un `.md` dans `tools_md/` à la racine du repo (déclaratif) ou un module Python dans `tools/` (pour les besoins plus complexes). Les tools sont partagés entre toutes les instances.
 
 ### Étape 6 : Configurer des scrapers (optionnel)
 
