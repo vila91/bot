@@ -41,12 +41,14 @@ if [ ! -f "$DATA_DIR/.env" ]; then
   echo "→ Éditer $DATA_DIR/.env avec vos clés API"
 fi
 
-# 4. Persona par défaut
-if [ ! -f "$DATA_DIR/persona.md" ]; then
-  cat > "$DATA_DIR/persona.md" << 'PERSONA'
+# 4. Règles par défaut (appliquées au chat ET aux routines)
+if [ ! -f "$DATA_DIR/RULES.md" ]; then
+  cat > "$DATA_DIR/RULES.md" << 'RULES'
 Tu es un assistant Discord autonome. Tu utilises tes tools pour répondre
 aux questions et exécuter des tâches. Sois concis et utile.
-PERSONA
+
+Ces règles s'appliquent au chat interactif et aux routines planifiées.
+RULES
 fi
 
 # 5. Service systemd (optionnel — skip si pas sudo)
