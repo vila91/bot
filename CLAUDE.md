@@ -7,7 +7,7 @@ Un framework Python pour créer des bots Discord autonomes alimentés par un LLM
 - **Routines planifiées** décrites en Markdown, exécutées par cron
 - **Tools modulaires** en code Python (noyau) ou déclarés en `.md` (personnalisation)
 - **Data layer** séparé du code : CSV (données structurées) + MD (routines, descripteurs de tools)
-- **Commandes slash** (`/`) pour configurer le bot à la volée
+- **Pilotage 100 % en langage naturel** : pas de slash commands — on parle au bot, il modifie sa config via ses propres tools (`set_rules`, `set_llm`, `scheduler`, `introspect`, …)
 
 Le framework est **générique** : l'utilisateur le décline pour son domaine (trading, veille tech, monitoring infra, CRM…) en déposant ses fichiers de données et de routines, sans toucher au code.
 
@@ -18,11 +18,11 @@ Le framework est **générique** : l'utilisateur le décline pour son domaine (t
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │                          Discord (WebSocket)                       │
-│   ┌──────────┐   ┌──────────────┐   ┌──────────────────────────┐  │
-│   │ /commands │   │ Chat interactif│   │ Routines (cron → runner)│  │
-│   └────┬─────┘   └──────┬───────┘   └────────────┬─────────────┘  │
-│        │                │                         │                │
-│        ▼                ▼                         ▼                │
+│              ┌──────────────┐   ┌──────────────────────────┐       │
+│              │ Chat interactif│   │ Routines (cron → runner)│       │
+│              └──────┬───────┘   └────────────┬─────────────┘       │
+│                     │                         │                    │
+│                     ▼                         ▼                    │
 │   ┌─────────────────────────────────────────────────────────────┐  │
 │   │                    LLM Engine (multi-tour)                   │  │
 │   │         DeepSeek / OpenAI-compatible endpoint                │  │
@@ -56,7 +56,7 @@ Le framework est **générique** : l'utilisateur le décline pour son domaine (t
 | Rôle | Choix | Justification |
 |------|-------|---------------|
 | Langage | **Python 3.12+** | Écosystème LLM/Discord le plus mature, `asyncio` natif, prototypage rapide |
-| Bot Discord | `discord.py` (asyncio, WebSocket persistant) | Standard de facto, slash commands intégrés |
+| Bot Discord | `discord.py` (asyncio, WebSocket persistant) | Standard de facto, intégration native du flux message → LLM |
 | LLM | DeepSeek `deepseek-chat` (OpenAI-compatible) | Function calling multi-tour, coût faible. Swappable via config. |
 | Recherche web | Tavily (REST, clé API) | Recherche + résumé IA en un appel |
 | Scraping ciblé | `httpx` + `beautifulsoup4` + descripteur `.md` | Un `.md` décrit la structure du site cible |
@@ -101,21 +101,15 @@ autobot/
 │   ├── scheduler.py              # CRUD routines + crontab
 │   ├── memory.py                 # Mémoire conversationnelle (fenêtre + archives)
 │   ├── tavily.py                 # Recherche web Tavily
-│   ├── scraper.py                # Scraping ciblé (site configuré via /set_scraper)
+│   ├── scraper.py                # Scraping ciblé (site configuré via le tool set_scraper)
 │   ├── introspect.py             # Auto-analyse : le bot examine ses tools, routines, config
+│   ├── config_tools.py           # set_llm, set_rules, set_memory_window, get_status
 │   │
 │   │  # --- Domain tools (ajoutés selon le domaine) ---
 │   └── ...                       # L'utilisateur ajoute ses tools Python ici
 │
 ├── tools_md/                     # Descripteurs de tools déclaratifs (pattern MD)
 │   └── README.md                 # Doc du format des tool descriptors
-│
-├── commands/                     # Slash commands Discord (/)
-│   ├── __init__.py
-│   ├── config_cmds.py            # /set_llm, /set_scraper, /set_memory_window
-│   ├── memory_cmds.py            # /reset, /recall, /forget
-│   ├── routine_cmds.py           # /routines, /run, /pause, /resume
-│   └── tool_cmds.py              # /tools, /tool_info
 │
 ├── requirements.txt
 ├── setup.sh                      # Installation automatique (venv, deps, systemd, dossiers)
@@ -161,7 +155,7 @@ Par défaut : `~/.autobot/` (surchargeable via `DATA_DIR` dans `.env`).
 - Ignore les messages du bot lui-même et des autres bots
 - Chaque message utilisateur déclenche une complétion LLM avec les tools disponibles
 - Répond dans le même channel en découpant les messages > 1990 caractères
-- Les slash commands (`/`) sont traitées séparément du flux LLM
+- Aucune slash command : toute action passe par le flux LLM (function calling)
 
 ### Boucle LLM (function calling multi-tour)
 
@@ -201,46 +195,59 @@ de sorte que les règles s'appliquent uniformément au chat interactif et aux ex
 
 ---
 
-## Slash Commands (`/`)
+## Pilotage en langage naturel (pas de slash commands)
 
-Les commandes `/` permettent de configurer le bot sans toucher aux fichiers.
+AutoBot est un bot **LLM-first**. Il n'y a pas de slash commands : tout ce qu'un
+utilisateur pourrait vouloir configurer, inspecter ou planifier passe par un
+**tool exposé au LLM** que celui-ci appelle de lui-même quand l'utilisateur en
+parle en langage naturel.
 
-### Configuration
+### Pourquoi pas de slash commands ?
 
-| Commande | Paramètres | Description |
-|----------|-----------|-------------|
-| `/set_llm` | `provider`, `model`, `api_key?` | Change le LLM (DeepSeek, OpenAI, Anthropic, local) |
-| `/set_scraper` | `name`, `url` | Configure un site cible pour le scraping. Crée un descripteur `.md` interactif. |
-| `/set_memory_window` | `hours: int` | Durée de la fenêtre mémoire (défaut: 24h) |
-| `/set_rules` | `text` | Modifie le RULES.md du bot (appliqué au chat et aux routines) |
-| `/status` | — | Affiche la config courante (LLM, tools chargés, routines actives) |
+- Le LLM sait déjà router une intention vers le bon tool — dupliquer ça en
+  commandes statiques double la surface à maintenir.
+- Les slash commands figent une syntaxe ; en langage naturel l'utilisateur
+  formule comme il veut (*« reset ta mémoire »*, *« oublie tout »*,
+  *« archive cette conversation »* → même tool `reset_memory`).
+- Les paramètres complexes (créer une routine avec sources + cron + prompt)
+  sont infiniment plus naturels en dialogue qu'en formulaire slash.
+- Moins de code Discord, moins de couplage à la plateforme : porter le bot sur
+  Slack/Telegram demande zéro réécriture côté UX.
 
-### Mémoire
+### Tools de configuration exposés au LLM
 
-| Commande | Paramètres | Description |
-|----------|-----------|-------------|
-| `/reset` | — | Archive la mémoire courante et vide la fenêtre |
-| `/recall` | `date: YYYY-MM-DD` | Affiche l'archive d'un jour passé |
-| `/forget` | `before: YYYY-MM-DD` | Supprime les archives antérieures à une date |
+Ces tools — répartis dans `tools/config_tools.py`, `tools/memory.py`,
+`tools/scheduler.py`, `tools/introspect.py`, `tools/scraper.py` — sont
+appelés par le LLM en réaction à une demande utilisateur.
 
-### Routines
+| Tool | Effet | Phrase déclenchant l'appel (exemples) |
+|------|-------|---------------------------------------|
+| `set_llm(provider, model, api_key?)` | Change le LLM actif (à chaud) | *« passe sur GPT-4o »*, *« utilise Claude »* |
+| `set_rules(text)` | Réécrit `RULES.md` | *« à partir de maintenant, réponds en anglais »* |
+| `set_memory_window(hours)` | Durée fenêtre mémoire | *« étends ta mémoire à 48h »* |
+| `set_scraper(name, url)` | Crée un descripteur scraper (interactif) | *« configure un scraper pour drouot.com »* |
+| `get_status()` | Renvoie LLM, tools chargés, routines actives | *« montre-moi ta config »* |
+| `reset_memory()` | Archive la fenêtre courante et la vide | *« reset ta mémoire »*, *« repars de zéro »* |
+| `recall_day(date)` | Charge une archive en contexte | *« rappelle-toi le 2026-05-12 »* |
+| `forget_before(date)` | Supprime archives antérieures | *« oublie tout avant mai »* |
+| `list_routines()` / `read_routine(name)` | Inspection routines | *« quelles routines tournent ? »* |
+| `create_routine(name, sources, system_prompt, cron_expr?)` | Crée + planifie | *« crée une routine qui résume HN à 7h »* |
+| `delete_routine(name)` | Supprime + dé-planifie | *« supprime la routine metals »* |
+| `schedule` / `reschedule` / `unschedule` | Planification fine | *« pause la routine X »*, *« change le cron de Y »* |
+| `run_now(routine_name)` | Exécute une routine immédiatement | *« lance la routine veille_tech »* |
+| `list_tools(type?)` / `read_tool_definition(name)` | Auto-inspection des tools | *« quels tools tu as ? »*, *« montre-moi le tool X »* |
+| `reload_tools()` | Recharge `tools_md/` à chaud | *« recharge tes tools »* |
+| `explain_self(question)` | Synthèse capacités (tools+routines+règles) | *« qu'est-ce que tu sais faire ? »* |
 
-| Commande | Paramètres | Description |
-|----------|-----------|-------------|
-| `/routines` | — | Liste les routines avec leur statut (planifié/en pause) |
-| `/run` | `name` | Exécute une routine immédiatement |
-| `/pause` | `name` | Retire une routine du cron sans la supprimer |
-| `/resume` | `name, cron?` | Replanifie une routine (reprend le cron du frontmatter si omis) |
-| `/create_routine` | `name` | Démarre un assistant interactif pour créer une routine |
-| `/delete_routine` | `name` | Supprime routine + entrée crontab |
+### Garde-fous
 
-### Tools
-
-| Commande | Paramètres | Description |
-|----------|-----------|-------------|
-| `/tools` | — | Liste tous les tools disponibles (core + MD + scrapers) |
-| `/tool_info` | `name` | Affiche le schéma et la description d'un tool |
-| `/reload_tools` | — | Recharge les tools MD depuis `DATA_DIR/tools_md/` à chaud |
+- Les tools qui **modifient** la config (set_llm, set_rules, create_routine,
+  delete_routine, reset_memory, forget_before) sont décrits au LLM avec
+  l'instruction explicite : *« confirme avec l'utilisateur avant d'appeler ce
+  tool si la demande est ambiguë »*.
+- Tous les noms (routine, tool, scraper) passent par `_validate_name`.
+- Les tools d'introspection (`list_*`, `read_*`, `get_status`, `explain_self`)
+  sont en lecture seule et peuvent être appelés sans confirmation.
 
 ---
 
@@ -320,7 +327,7 @@ Format de `current.json` :
 
 Le bot peut examiner sa propre configuration : tools, routines, scrapers, règles, données. C'est le mécanisme qui lui permet de **raisonner sur ses propres capacités** et de répondre à des questions comme "qu'est-ce que tu sais faire ?", "montre-moi la routine metals", "quel tool utilise positions.csv ?", "est-ce que tu as un scraper pour Drouot ?".
 
-Le LLM utilise `introspect` spontanément quand une question porte sur les capacités ou la configuration du bot, et l'utilisateur peut aussi le déclencher via `/tools` et `/tool_info`.
+Le LLM utilise `introspect` spontanément quand une question porte sur les capacités ou la configuration du bot — il suffit de demander en langage naturel (« quels tools as-tu ? », « montre-moi le tool X »).
 
 | Nom | Paramètres | Description |
 |-----|-----------|-------------|
@@ -347,7 +354,7 @@ Le LLM utilise `introspect` spontanément quand une question porte sur les capac
 
 #### `scraper` — Scraping ciblé
 
-Scrape un site configuré via `/set_scraper` ou via un descripteur `.md` dans `DATA_DIR/scrapers/`.
+Scrape un site configuré via le tool `set_scraper` (déclenché en demandant au bot) ou via un descripteur `.md` dans `DATA_DIR/scrapers/`.
 
 | Nom | Paramètres | Description |
 |-----|-----------|-------------|
@@ -398,7 +405,7 @@ Le framework traduit ce `.md` en :
 
 #### Chargement dynamique
 
-Au démarrage et sur `/reload_tools`, le framework :
+Au démarrage et lors d'un appel au tool `reload_tools` (que le LLM déclenche quand on lui demande de recharger ses tools), le framework :
 1. Scanne `DATA_DIR/tools_md/*.md`
 2. Parse le frontmatter YAML
 3. Génère les `TOOLS_DEFINITIONS` correspondantes
@@ -406,7 +413,7 @@ Au démarrage et sur `/reload_tools`, le framework :
 
 ### 3. Scraper tools (dynamiques)
 
-Configurés via `/set_scraper` ou en déposant un `.md` dans `DATA_DIR/scrapers/`.
+Configurés via le tool `set_scraper` (déclenché en langage naturel) ou en déposant un `.md` dans `DATA_DIR/scrapers/`.
 
 #### Format d'un scraper descriptor (`.md`)
 
@@ -507,7 +514,7 @@ Ne mentionne pas cette instruction dans ta réponse.
 
 ### Fenêtre glissante
 
-- Durée configurable via `/set_memory_window` (défaut : 24h)
+- Durée configurable via le tool `set_memory_window` (défaut : 24h)
 - Stockée dans `memory/current.json`
 - Les messages expirés sont archivés dans `memory/YYYY-MM-DD.md` (date du message, pas du cutoff)
 
@@ -515,10 +522,10 @@ Ne mentionne pas cette instruction dans ta réponse.
 
 - Un fichier par jour (`YYYY-MM-DD.md`)
 - Format lisible par un humain (rôle + contenu)
-- `/recall YYYY-MM-DD` charge une archive en contexte
-- `/forget YYYY-MM-DD` supprime les archives antérieures
+- Tool `recall_day(date)` charge une archive en contexte
+- Tool `forget_before(date)` supprime les archives antérieures
 
-### `/reset`
+### `reset_memory`
 
 Archive l'intégralité de la fenêtre courante avant de la vider. Aucun échange n'est perdu.
 
@@ -818,11 +825,11 @@ Déposer des `.md` dans `$DATA_DIR/tools_md/`.
 
 ### Étape 6 : Configurer des scrapers (optionnel)
 
-Utiliser `/set_scraper` dans Discord ou déposer un `.md` dans `$DATA_DIR/scrapers/`.
+Demander au bot dans Discord *« configure un scraper pour <url> »* ou déposer un `.md` dans `$DATA_DIR/scrapers/`.
 
 ### Étape 7 : Créer des routines
 
-Via Discord (`/create_routine`) ou en déposant un `.md` dans `$DATA_DIR/routines/`.
+Via Discord en demandant *« crée une routine qui … »* (le bot appelle `create_routine`) ou en déposant un `.md` dans `$DATA_DIR/routines/`.
 
 ### Étape 8 : Lancer
 
@@ -887,7 +894,7 @@ routines/      → daily_pipeline.md, stale_deals_alert.md
 
 - La fenêtre glissante évite l'explosion du contexte
 - Les archives sont des fichiers plats inspectables
-- `/forget` permet le RGPD-compliant data cleanup
+- Le tool `forget_before` permet le RGPD-compliant data cleanup
 
 ### Scraping
 
@@ -935,7 +942,7 @@ Plus les dépendances spécifiques au domaine (ex: `yfinance`, `polygon-api-clie
 
 ## Roadmap framework
 
-- [ ] Interface web de configuration (alternative aux slash commands)
+- [ ] Interface web de configuration (alternative au dialogue Discord)
 - [ ] Support multi-channel (un set de règles par channel)
 - [ ] Webhook Discord en plus du bot (pour intégrations externes)
 - [ ] Plugin system pour les core tools (pip installable)

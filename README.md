@@ -8,7 +8,7 @@ Un bot AutoBot :
 - **Exécute des routines planifiées** décrites en Markdown (cron)
 - **Utilise des tools** modulaires : core Python ou déclaratifs `.md`
 - **Lit vos données** depuis des CSV/MD que vous déposez
-- **Se configure** à chaud via slash commands Discord (`/`)
+- **Se configure en langage naturel** : on parle au bot, il modifie sa propre config via ses tools
 
 Le framework est **générique** : on le décline pour son domaine (trading, veille tech, CRM, monitoring…) en déposant des fichiers de données et de routines, sans toucher au code.
 
@@ -83,7 +83,7 @@ Tu es un analyste trading. Réponses concises, focus portefeuille.
 Tu utilises tes tools pour lire positions.csv et calculer les P&L.
 ```
 
-Modifiable aussi à chaud via `/set_rules`.
+Modifiable aussi à chaud en demandant au bot : *« change tes règles : … »* — il édite `RULES.md` via son tool.
 
 ### 3. Déposer vos données
 
@@ -116,18 +116,29 @@ DATA_DIR=$HOME/.autobot ./venv/bin/python3 bot.py
 
 Écris dans le channel Discord configuré. Le bot répond avec la mémoire des dernières heures (fenêtre glissante de 24h par défaut).
 
-### Slash commands
+### Tout se pilote en langage naturel
 
-| Catégorie | Commandes |
-|-----------|-----------|
-| **Config** | `/set_llm` `/set_rules` `/set_memory_window` `/set_scraper` `/status` |
-| **Mémoire** | `/reset` `/recall <date>` `/forget <before>` |
-| **Routines** | `/routines` `/run <name>` `/pause <name>` `/resume <name>` `/create_routine` `/delete_routine` |
-| **Tools** | `/tools` `/tool_info <name>` `/reload_tools` |
+AutoBot n'a **pas de slash commands**. On parle au bot comme à un humain — il dispose de tools pour tout ce qu'il faut configurer, inspecter ou planifier. Exemples :
+
+| Intention | Ce que tu dis |
+|-----------|---------------|
+| Voir la config | *« montre-moi ta config »*, *« que sais-tu faire ? »* |
+| Changer les règles | *« à partir de maintenant, réponds toujours en anglais »* |
+| Changer le LLM | *« passe sur GPT-4o »* |
+| Créer une routine | *« crée une routine qui me résume HN chaque matin à 7h »* |
+| Lister les routines | *« quelles routines tournent ? »* |
+| Lancer une routine | *« exécute la routine veille_tech maintenant »* |
+| Mettre en pause | *« pause la routine metals »* |
+| Recharger les tools MD | *« recharge tes tools »* |
+| Reset mémoire | *« archive cette conversation et repars de zéro »* |
+| Recall un jour passé | *« rappelle-toi notre échange du 2026-05-12 »* |
+| Configurer un scraper | *« configure un scraper pour drouot.com »* |
+
+Le bot utilise `introspect`, `scheduler`, `memory`, `set_rules`, etc. pour exécuter ces demandes. Si une formulation est ambiguë, il demande confirmation avant d'agir.
 
 ### Routines planifiées
 
-Crée une routine via Discord (`/create_routine`) ou en déposant un `.md` dans `$DATA_DIR/routines/` :
+Crée une routine en demandant au bot, ou en déposant un `.md` dans `$DATA_DIR/routines/` :
 
 ```markdown
 ---
@@ -153,11 +164,11 @@ Le runner écrit sur le channel Discord (`POST: …`) ou skip silencieusement (`
 
 ### Tools personnalisés (sans Python)
 
-Dépose un `.md` dans `$DATA_DIR/tools_md/` (voir le format dans CLAUDE.md, section **Tools déclaratifs**). Le bot le charge au démarrage ou via `/reload_tools`.
+Dépose un `.md` dans `$DATA_DIR/tools_md/` (voir le format dans CLAUDE.md, section **Tools déclaratifs**). Le bot le charge au démarrage, ou demande-lui *« recharge tes tools »*.
 
 ### Scrapers
 
-Configure un site via `/set_scraper <name> <url>` (assistant interactif) ou dépose un `.md` dans `$DATA_DIR/scrapers/`. Le scraper devient un tool LLM utilisable dans le chat et dans les routines.
+Demande au bot *« configure un scraper pour <url> »* (il te questionne sur les sélecteurs) ou dépose directement un `.md` dans `$DATA_DIR/scrapers/`. Le scraper devient un tool LLM utilisable dans le chat et dans les routines.
 
 ---
 
@@ -197,8 +208,8 @@ Le `DATA_DIR` (données, routines, mémoire) n'est jamais touché par les mises 
 | Le bot ne répond pas | `journalctl -u autobot -n 100` — vérifier token Discord et channel ID |
 | Erreur LLM | Vérifier `LLM_API_KEY` et `LLM_BASE_URL` dans `.env` |
 | Routine ne s'exécute pas | `crontab -l` puis consulter `/tmp/autobot_<name>.log` |
-| Tool MD non chargé | `/reload_tools` puis `/tool_info <name>` ; vérifier le frontmatter YAML |
-| Mémoire trop courte | `/set_memory_window 48` |
+| Tool MD non chargé | Demander *« recharge tes tools »* puis *« décris le tool X »* ; vérifier le frontmatter YAML |
+| Mémoire trop courte | *« passe ta fenêtre mémoire à 48h »* |
 
 ---
 
